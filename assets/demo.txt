@@ -1,0 +1,23 @@
+TOOLTAX — AGENT TOOL COST REPORT
+====================================================================
+Calls: 10   Observed payload: ~35,091 tok   Estimated waste: ~31,045 tok (88.5%)
+Files: 0   Sources: none
+
+SERVER                CALLS     TOKENS    WASTE   SCORE  RECOMMENDATION
+----------------------------------------------------------------------------------
+context7                  2     35,017    88.5%     65/100  cap or filter tool output
+memory                    3         20   100.0%     47/100  monitor
+filesystem                1         12   100.0%     25/100  monitor
+github                    4         42    16.7%     91/100  keep
+
+TOP WASTE SIGNALS
+- context7/docs: output-bloat (~15,500 tok) — output ~17,500 tokens
+- context7/docs: output-bloat (~15,500 tok) — output ~17,500 tokens
+- filesystem/read: error (~12 tok) — tool call failed
+- github/search_code: duplicate-call (~7 tok) — same tool + arguments repeated within 8 calls
+- memory/search: empty-result (~7 tok) — tool returned no useful payload
+- memory/search: empty-result (~7 tok) — tool returned no useful payload
+- memory/get: unmatched-call (~6 tok) — no matching tool result found in trace
+- memory/search: duplicate-call (~6 tok) — same tool + arguments repeated within 8 calls
+
+Interpretation: observed payload cost only; provider prompt/schema/billing cost is not reconstructed.
