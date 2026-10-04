@@ -19,6 +19,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Compile
-        run: python -m py_compile scripts/tool_tax.py scripts/tool_tax_capture.py tests/test_tool_tax.py tests/test_capture.py tests/fixtures/fake_mcp_server.py
+        run: python -m compileall -q scripts tests
       - name: Test
         run: python -m unittest discover -s tests -v

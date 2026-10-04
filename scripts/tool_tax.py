@@ -703,7 +703,10 @@ def print_comparison_text(data: dict[str, Any]) -> None:
         print(f"{'SERVER':<22} {'CALLS':>11} {'PAYLOAD TOK':>23} {'WASTE TOK':>23}")
         print("-" * 82)
         for row in changed[:15]:
-            print(f"{row['server'][:22]:<22} {f"{row['before_calls']}→{row['after_calls']}":>11} {f"{row['before_tokens']:,}→{row['after_tokens']:,}":>23} {f"{row['before_waste_tokens']:,}→{row['after_waste_tokens']:,}":>23}")
+            calls_delta = f"{row['before_calls']}→{row['after_calls']}"
+            payload_delta = f"{row['before_tokens']:,}→{row['after_tokens']:,}"
+            waste_delta = f"{row['before_waste_tokens']:,}→{row['after_waste_tokens']:,}"
+            print(f"{row['server'][:22]:<22} {calls_delta:>11} {payload_delta:>23} {waste_delta:>23}")
     print("\nInterpretation: lower is better for the displayed metrics; schema is advertised MCP definition size, not provider billing/context truth.")
 
 
