@@ -1,0 +1,6 @@
+{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T16:00:00Z","session":"s1","call_id":"a","server":"github","tool":"search","arguments":{"q":"x"}}
+{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T16:00:01Z","session":"s1","call_id":"a","result":{"items":[1]},"success":true}
+{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T16:00:02Z","session":"s1","call_id":"b","server":"github","tool":"search","arguments":{"q":"x"}}
+{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T16:00:03Z","session":"s1","call_id":"b","result":{"items":[1]},"success":true}
+{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T16:00:04Z","session":"s1","call_id":"c","server":"memory","tool":"lookup","arguments":{"q":"nope"}}
+{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T16:00:05Z","session":"s1","call_id":"c","result":[],"success":true}
