@@ -22,3 +22,43 @@ jobs:
         run: python -m compileall -q scripts tests
       - name: Test
         run: python -m unittest discover -s tests -v
+      - name: Budget CLI pass smoke test
+        run: >-
+          python scripts/tool_tax_budget.py tests/fixtures/canonical_capture.jsonl
+          --max-waste-percent 20
+          --max-schema-tokens 10000
+          --max-duplicate-calls 0
+          --max-errors 0
+
+  action-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run ToolTax action against fixture
+        id: tooltax
+        uses: ./
+        with:
+          trace-path: tests/fixtures/canonical_capture.jsonl
+          max-waste-percent: '20'
+          max-schema-tokens: '10000'
+          max-duplicate-calls: '0'
+          max-errors: '0'
+      - name: Verify passing action outputs
+        shell: bash
+        run: |
+          test "${{ steps.tooltax.outputs.passed }}" = "true"
+          test "${{ steps.tooltax.outputs.violations }}" = "0"
+          test -f tooltax-budget.md
+      - name: Run deliberately strict budget
+        id: strict
+        continue-on-error: true
+        uses: ./
+        with:
+          trace-path: tests/fixtures/canonical_capture.jsonl
+          max-schema-tokens: '100'
+          report-path: tooltax-budget-strict.md
+      - name: Verify strict budget failed
+        shell: bash
+        run: |
+          test "${{ steps.strict.outcome }}" = "failure"
+          test -f tooltax-budget-strict.md

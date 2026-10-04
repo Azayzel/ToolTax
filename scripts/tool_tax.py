@@ -25,7 +25,7 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any, Iterable, Iterator
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 ERROR_HINTS = (
     "error", "failed", "failure", "exception", "traceback", "not found",

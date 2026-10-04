@@ -42,3 +42,9 @@ Live capture stores `estimated_input_tokens`, `estimated_output_tokens`, and `la
 
 ## Before/after is observational
 Comparison mode reports deltas between two trace sets. It does not infer that a configuration change caused the difference. Users should compare representative workloads and control obvious workload changes.
+
+## CI budgets reuse the analyzer
+The CI gate consumes the same normalized report metrics as the CLI and skill. There is no second scoring implementation that can drift from user-visible reports.
+
+## Missing telemetry fails configured budgets by default
+A configured schema or latency budget must not appear green when the trace lacks that telemetry. Users can explicitly opt into skipping missing metrics when that behavior is intentional.

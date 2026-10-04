@@ -1,0 +1,102 @@
+name: ToolTax CI Budget
+description: Fail CI when AI agent/MCP tool usage exceeds configured waste, schema, duplication, error, payload, or latency budgets.
+author: Azayzel
+branding:
+  icon: activity
+  color: purple
+inputs:
+  trace-path:
+    description: ToolTax trace file or directory to analyze.
+    required: true
+  source:
+    description: Trace adapter (auto, canonical, claude, codex).
+    required: false
+    default: auto
+  python-version:
+    description: Python version used by ToolTax.
+    required: false
+    default: '3.10'
+  max-waste-percent:
+    description: Maximum estimated waste percentage.
+    required: false
+    default: ''
+  max-schema-tokens:
+    description: Maximum advertised MCP schema token estimate.
+    required: false
+    default: ''
+  max-duplicate-calls:
+    description: Maximum duplicate tool calls.
+    required: false
+    default: ''
+  max-errors:
+    description: Maximum failed tool calls.
+    required: false
+    default: ''
+  max-observed-tokens:
+    description: Maximum observed tool payload token estimate.
+    required: false
+    default: ''
+  max-median-latency-ms:
+    description: Maximum median tool-call latency in milliseconds.
+    required: false
+    default: ''
+  allow-missing-metrics:
+    description: Allow configured budgets to skip when their telemetry is unavailable.
+    required: false
+    default: 'false'
+  allow-empty:
+    description: Allow traces with zero supported tool calls.
+    required: false
+    default: 'false'
+  report-path:
+    description: Markdown budget report path written in the workspace.
+    required: false
+    default: tooltax-budget.md
+outputs:
+  passed:
+    description: Whether every configured budget passed.
+    value: ${{ steps.budget.outputs.passed }}
+  violations:
+    description: Number of budget violations.
+    value: ${{ steps.budget.outputs.violations }}
+  waste_percent:
+    description: Estimated waste percentage.
+    value: ${{ steps.budget.outputs.waste_percent }}
+  schema_tokens:
+    description: Advertised MCP schema token estimate.
+    value: ${{ steps.budget.outputs.schema_tokens }}
+  duplicate_calls:
+    description: Duplicate call count.
+    value: ${{ steps.budget.outputs.duplicate_calls }}
+  errors:
+    description: Error count.
+    value: ${{ steps.budget.outputs.errors }}
+  observed_tokens:
+    description: Observed tool payload token estimate.
+    value: ${{ steps.budget.outputs.observed_tokens }}
+  report_path:
+    description: Path to the generated Markdown report.
+    value: ${{ steps.budget.outputs.report_path }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Evaluate ToolTax budget
+      id: budget
+      shell: bash
+      env:
+        TOOLTAX_TRACE_PATH: ${{ inputs.trace-path }}
+        TOOLTAX_SOURCE: ${{ inputs.source }}
+        TOOLTAX_MAX_WASTE_PERCENT: ${{ inputs.max-waste-percent }}
+        TOOLTAX_MAX_SCHEMA_TOKENS: ${{ inputs.max-schema-tokens }}
+        TOOLTAX_MAX_DUPLICATE_CALLS: ${{ inputs.max-duplicate-calls }}
+        TOOLTAX_MAX_ERRORS: ${{ inputs.max-errors }}
+        TOOLTAX_MAX_OBSERVED_TOKENS: ${{ inputs.max-observed-tokens }}
+        TOOLTAX_MAX_MEDIAN_LATENCY_MS: ${{ inputs.max-median-latency-ms }}
+        TOOLTAX_ALLOW_MISSING_METRICS: ${{ inputs.allow-missing-metrics }}
+        TOOLTAX_ALLOW_EMPTY: ${{ inputs.allow-empty }}
+        TOOLTAX_REPORT_PATH: ${{ inputs.report-path }}
+      run: python "$GITHUB_ACTION_PATH/scripts/tool_tax_budget.py" --from-action-env

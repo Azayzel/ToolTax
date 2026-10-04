@@ -22,7 +22,7 @@
 - [ ] Streamable HTTP capture strategy that preserves auth/session semantics
 
 ## v0.3 — team/CI
-- [ ] GitHub Action with configurable waste budget
+- [x] GitHub Action with configurable waste budget
 - [ ] Trend reports across commits/weeks
 - [ ] SARIF/PR annotations for regressions
 - [ ] Organization rollups without retaining raw prompts/results

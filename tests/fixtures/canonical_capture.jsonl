@@ -1,0 +1,4 @@
+{"schema":"tooltax.v1","event":"tool_schema_snapshot","timestamp":"2026-10-04T18:00:00Z","session":"ci","server":"github","tool_count":2,"schema_bytes":8000,"estimated_schema_tokens":2000}
+{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T18:00:01Z","session":"ci","call_id":"1","server":"github","tool":"search_code","arguments":{"q":"TODO"},"estimated_input_tokens":5}
+{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T18:00:01.050Z","session":"ci","call_id":"1","result":{"items":[1,2]},"success":true,"error":false,"estimated_output_tokens":8,"latency_ms":50}
+{"schema":"tooltax.v1","event":"capture_end","timestamp":"2026-10-04T18:00:02Z","session":"ci","server":"github","schema_tokens":2000,"schema_bytes":8000,"request_bytes":100,"response_bytes":200}

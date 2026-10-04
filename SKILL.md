@@ -4,7 +4,7 @@ description: Audit AI agent tool and MCP usage for wasted tokens, duplicate call
 license: MIT
 compatibility: Requires Python 3.10+. Supports local ToolTax JSONL, Claude Code transcripts, OpenAI Codex rollouts, and live stdio MCP capture on a best-effort/transport-transparent basis.
 metadata:
-  version: "0.2.1"
+  version: "0.3.0"
   command: "/tool-tax"
 ---
 
@@ -97,6 +97,18 @@ python scripts/tool_tax_redact.py raw.jsonl share-safe.jsonl
 
 For reports, add `--share-safe` to suppress local source-file paths. Never describe heuristic redaction as guaranteed anonymization or DLP.
 
+## Enforce a CI budget
+
+Use `scripts/tool_tax_budget.py` locally or the repository `action.yml` in GitHub Actions. Budget only metrics that the trace can actually measure. By default, configured budgets fail if required telemetry is missing; do not reinterpret missing data as zero.
+
+Typical guardrails:
+
+```yaml
+max-waste-percent: '20'
+max-schema-tokens: '10000'
+max-duplicate-calls: '5'
+max-errors: '2'
+```
 ## `/tool-tax` workflow
 
 When invoked:
@@ -148,3 +160,4 @@ See:
 - [Scoring](references/SCORING.md)
 - [Redaction](references/REDACTION.md)
 - [Comparison](references/COMPARISON.md)
+- [CI budget](references/CI_BUDGET.md)

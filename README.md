@@ -158,6 +158,24 @@ python scripts/tool_tax.py share-safe.jsonl --share-safe --format markdown
 
 See [`references/REDACTION.md`](references/REDACTION.md) and [`references/COMPARISON.md`](references/COMPARISON.md).
 
+## CI budget gate
+
+Turn ToolTax into a PR guardrail with the composite GitHub Action:
+
+```yaml
+- uses: actions/checkout@v7
+- uses: Azayzel/ToolTax@v0
+  with:
+    trace-path: .tooltax/current.jsonl
+    max-waste-percent: '20'
+    max-schema-tokens: '10000'
+    max-duplicate-calls: '5'
+    max-errors: '2'
+```
+
+Configured budgets fail closed when required telemetry is missing, so a schema budget cannot silently pass on a trace that never captured schemas. The action writes `tooltax-budget.md`, adds a job summary, exposes metric outputs, and fails the step on violations.
+
+The same gate works locally with `scripts/tool_tax_budget.py`. See [`references/CI_BUDGET.md`](references/CI_BUDGET.md).
 ## Agent skill
 
 The repository root is a portable Agent Skill. Invoke it as **`/tool-tax`** in clients that expose skill commands, or ask your agent to audit tool/MCP waste.
@@ -185,7 +203,7 @@ The capture tests launch a fake stdio MCP server and verify that protocol traffi
 
 ## Status
 
-**v0.2.1** — live stdio capture, share-safe redaction, preserved capture metrics, and before/after comparison are implemented. Remaining v0.2 work is filtering/date windows and a streamable HTTP capture strategy.
+**v0.3.0** — live stdio capture, redaction, before/after comparison, and configurable GitHub Actions CI budgets are implemented. Next team features are trend reports, annotations, and aggregate rollups.
 
 ## License
 

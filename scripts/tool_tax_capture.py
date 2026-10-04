@@ -37,7 +37,7 @@ except ModuleNotFoundError:  # direct import-by-path in tests/embedders
     _spec.loader.exec_module(_module)
     Redactor = _module.Redactor
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 SCHEMA = "tooltax.v1"
 
 
