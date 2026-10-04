@@ -1,0 +1,6 @@
+{
+  "terminal.integrated.env.linux": {
+    "ANTHROPIC_BASE_URL": "http://localhost:4100",
+    "OPENAI_BASE_URL": "http://localhost:4100/v1"
+  }
+}
