@@ -12,11 +12,14 @@
 - [x] Tests and fixtures
 
 ## v0.2 — capture, not inference
-- [ ] MCP proxy/capture mode for exact server/tool timings
-- [ ] Capture tool definitions/schema size to estimate context overhead
+- [x] Stdio MCP proxy/capture mode for exact proxy-observed server/tool timings
+- [x] Capture `tools/list` definitions/schema size to estimate advertised schema overhead
+- [x] De-duplicate schema catalogs across pagination and repeated tool-list refreshes
+- [x] Protocol-transparency integration test with a real child process
 - [ ] Session/project filtering and date windows
 - [ ] Redaction pipeline before report sharing
 - [ ] Baseline comparison: before vs after disabling/tuning a server
+- [ ] Streamable HTTP capture strategy that preserves auth/session semantics
 
 ## v0.3 — team/CI
 - [ ] GitHub Action with configurable waste budget
