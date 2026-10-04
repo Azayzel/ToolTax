@@ -32,3 +32,13 @@ Live capture measures the exact serialized definitions returned by `tools/list`,
 
 ## Schema catalogs de-duplicate pagination and refreshes
 Repeated `tools/list` calls should not multiply schema overhead. ToolTax keeps the latest definition per tool name and unions paginated pages into one observed catalog for the session.
+
+
+## Redact before persistence when possible
+Capture-time `--redact` applies to telemetry before it is written to disk, while measurements are computed from the original in-memory payload. This preserves comparative metrics without retaining obvious secrets/PII in the trace. Redaction is heuristic and must not be marketed as complete anonymization or DLP.
+
+## Preserve measured estimates in canonical events
+Live capture stores `estimated_input_tokens`, `estimated_output_tokens`, and `latency_ms` on call/result events. A redacted trace can therefore retain the original measurement magnitudes instead of re-estimating from short placeholders.
+
+## Before/after is observational
+Comparison mode reports deltas between two trace sets. It does not infer that a configuration change caused the difference. Users should compare representative workloads and control obvious workload changes.

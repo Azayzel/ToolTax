@@ -25,7 +25,7 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any, Iterable, Iterator
 
-VERSION = "0.1.0"
+VERSION = "0.2.1"
 
 ERROR_HINTS = (
     "error", "failed", "failure", "exception", "traceback", "not found",
@@ -128,14 +128,17 @@ class ToolCall:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     source_file: str = ""
+    captured_input_tokens: int | None = None
+    captured_output_tokens: int | None = None
+    captured_latency_ms: int | None = None
 
     @property
     def input_tokens(self) -> int:
-        return token_estimate(self.arguments)
+        return self.captured_input_tokens if self.captured_input_tokens is not None else token_estimate(self.arguments)
 
     @property
     def output_tokens(self) -> int:
-        return token_estimate(self.result)
+        return self.captured_output_tokens if self.captured_output_tokens is not None else token_estimate(self.result)
 
     @property
     def observed_tokens(self) -> int:
@@ -143,6 +146,8 @@ class ToolCall:
 
     @property
     def latency_ms(self) -> int | None:
+        if self.captured_latency_ms is not None:
+            return self.captured_latency_ms
         if not self.started_at or not self.ended_at:
             return None
         return max(0, int((self.ended_at - self.started_at).total_seconds() * 1000))
@@ -166,6 +171,12 @@ class ParseStats:
     model_output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    advertised_schema_tokens: int = 0
+    advertised_schema_bytes: int = 0
+    advertised_tool_count: int = 0
+    schema_files: int = 0
+    protocol_request_bytes: int = 0
+    protocol_response_bytes: int = 0
 
 
 def iter_jsonl(path: pathlib.Path, stats: ParseStats) -> Iterator[dict[str, Any]]:
@@ -198,18 +209,39 @@ def sniff_source(record: dict[str, Any]) -> str:
     return "unknown"
 
 
-def parse_canonical(records: Iterable[dict[str, Any]], session: str, source_file: str) -> list[ToolCall]:
+def parse_canonical(records: Iterable[dict[str, Any]], session: str, source_file: str, stats: ParseStats) -> list[ToolCall]:
     pending: dict[str, ToolCall] = {}
     out: list[ToolCall] = []
+    final_schema_tokens = 0
+    final_schema_bytes = 0
+    final_tool_count = 0
+    final_request_bytes = 0
+    final_response_bytes = 0
+    saw_schema = False
     for rec in records:
         event = rec.get("event") or rec.get("type")
         cid = str(rec.get("call_id") or rec.get("id") or "")
+        if event == "tool_schema_snapshot":
+            saw_schema = True
+            final_schema_tokens = int(rec.get("estimated_schema_tokens") or rec.get("schema_tokens") or final_schema_tokens or 0)
+            final_schema_bytes = int(rec.get("schema_bytes") or final_schema_bytes or 0)
+            final_tool_count = int(rec.get("tool_count") or final_tool_count or 0)
+            continue
+        if event == "capture_end":
+            if rec.get("schema_tokens") is not None:
+                saw_schema = True
+                final_schema_tokens = int(rec.get("schema_tokens") or 0)
+                final_schema_bytes = int(rec.get("schema_bytes") or 0)
+            final_request_bytes = int(rec.get("request_bytes") or final_request_bytes or 0)
+            final_response_bytes = int(rec.get("response_bytes") or final_response_bytes or 0)
+            continue
         if event == "tool_call":
             server, tool = tool_identity(str(rec.get("tool") or rec.get("name") or "unknown"), rec.get("server"))
             call = ToolCall(
                 source="canonical", session=str(rec.get("session") or session), call_id=cid or short_hash(rec),
                 tool=tool, server=server, started_at=parse_ts(rec.get("timestamp")),
                 arguments=rec.get("arguments", rec.get("input")), source_file=source_file,
+                captured_input_tokens=int(rec["estimated_input_tokens"]) if rec.get("estimated_input_tokens") is not None else None,
             )
             pending[call.call_id] = call
             out.append(call)
@@ -222,8 +254,19 @@ def parse_canonical(records: Iterable[dict[str, Any]], session: str, source_file
             call.ended_at = parse_ts(rec.get("timestamp"))
             call.result = rec.get("result", rec.get("output"))
             call.error = bool(rec.get("error", False))
+            if rec.get("estimated_output_tokens") is not None:
+                call.captured_output_tokens = int(rec.get("estimated_output_tokens") or 0)
+            if rec.get("latency_ms") is not None:
+                call.captured_latency_ms = int(rec.get("latency_ms") or 0)
             if "success" in rec:
                 call.explicit_success = bool(rec["success"])
+    if saw_schema:
+        stats.schema_files += 1
+        stats.advertised_schema_tokens += final_schema_tokens
+        stats.advertised_schema_bytes += final_schema_bytes
+        stats.advertised_tool_count += final_tool_count
+    stats.protocol_request_bytes += final_request_bytes
+    stats.protocol_response_bytes += final_response_bytes
     return out
 
 
@@ -348,7 +391,7 @@ def load_file(path: pathlib.Path, forced_source: str, stats: ParseStats) -> list
     stats.source_counts[source] += 1
     session = path.stem
     if source == "canonical":
-        return parse_canonical(records, session, str(path))
+        return parse_canonical(records, session, str(path), stats)
     if source == "claude":
         return parse_claude(records, session, str(path), stats)
     if source == "codex":
@@ -371,12 +414,11 @@ def discover_paths(inputs: list[str], source: str) -> list[pathlib.Path]:
     else:
         for raw in inputs:
             path = pathlib.Path(os.path.expanduser(raw))
-            if path.is_file():
-                paths.append(path)
-            elif path.is_dir():
+            if path.is_dir():
                 paths.extend(path.rglob("*.jsonl"))
-    # Dedup without resolving (some paths may be inaccessible/broken symlinks).
-    return sorted(dict.fromkeys(paths), key=lambda p: str(p))
+            elif path.is_file():
+                paths.append(path)
+    return sorted(set(p.resolve() for p in paths), key=str)
 
 
 @dataclasses.dataclass
@@ -475,17 +517,35 @@ def recommendation(row: dict[str, Any]) -> str:
     return "monitor"
 
 
-def report_data(calls: list[ToolCall], findings: list[Finding], stats: ParseStats, files: list[pathlib.Path]) -> dict[str, Any]:
+def report_data(
+    calls: list[ToolCall],
+    findings: list[Finding],
+    stats: ParseStats,
+    files: list[pathlib.Path],
+    share_safe: bool = False,
+) -> dict[str, Any]:
     rows = group_metrics(calls, findings)
     total = sum(c.observed_tokens for c in calls)
     waste = min(total, sum(f.waste_tokens for f in findings)) if total else sum(f.waste_tokens for f in findings)
+    latencies = [c.latency_ms for c in calls if c.latency_ms is not None]
+    errors = sum(1 for c in calls if c.error or c.explicit_success is False)
+    duplicate_calls = sum(1 for f in findings if f.kind == "duplicate-call")
     return {
         "version": VERSION,
         "files_scanned": len(files),
         "calls": len(calls),
+        "errors": errors,
+        "duplicate_calls": duplicate_calls,
         "observed_tokens": total,
         "estimated_waste_tokens": waste,
         "estimated_waste_pct": (100 * waste / total) if total else 0.0,
+        "median_latency_ms": int(statistics.median(latencies)) if latencies else None,
+        "advertised_schema_tokens": stats.advertised_schema_tokens,
+        "advertised_schema_bytes": stats.advertised_schema_bytes,
+        "advertised_tool_count": stats.advertised_tool_count,
+        "schema_files": stats.schema_files,
+        "protocol_request_bytes": stats.protocol_request_bytes,
+        "protocol_response_bytes": stats.protocol_response_bytes,
         "malformed_lines": stats.malformed_lines,
         "sources": dict(stats.source_counts),
         "model_usage_observed": {
@@ -499,15 +559,75 @@ def report_data(calls: list[ToolCall], findings: list[Finding], stats: ParseStat
             {
                 "kind": f.kind, "severity": f.severity, "server": f.call.server, "tool": f.call.tool,
                 "call_id": f.call.call_id, "waste_tokens": f.waste_tokens, "detail": f.detail,
-                "source_file": f.call.source_file,
+                "source_file": "<redacted:path>" if share_safe else f.call.source_file,
             }
             for f in findings
         ],
+        "share_safe": share_safe,
         "notes": [
-            "Token counts per tool are deterministic payload estimates (~4 chars/token), not provider billing.",
+            "Tool payload token counts are provider-neutral estimates unless a live capture supplied preserved estimates; they are not provider billing.",
+            "Advertised schema tokens are measured from MCP tools/list definitions and are not guaranteed to equal provider/model context cost.",
             "Claude end-to-end latency may include time waiting for user approval.",
             "Utility score is a heuristic based on failures, duplication, empty results, and payload waste; it is not causal ROI.",
         ],
+    }
+
+
+def pct_change(before: int | float | None, after: int | float | None) -> float | None:
+    if before is None or after is None or before == 0:
+        return None
+    return 100.0 * (after - before) / before
+
+
+def comparison_data(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    metric_specs = [
+        ("advertised_schema_tokens", "Advertised schema", "tok", True),
+        ("observed_tokens", "Observed tool payload", "tok", True),
+        ("estimated_waste_tokens", "Estimated waste", "tok", True),
+        ("calls", "Tool calls", "calls", True),
+        ("errors", "Errors", "errors", True),
+        ("duplicate_calls", "Duplicate calls", "calls", True),
+        ("median_latency_ms", "Median latency", "ms", True),
+    ]
+    metrics = []
+    for key, label, unit, lower_is_better in metric_specs:
+        b = before.get(key)
+        a = after.get(key)
+        delta = None if b is None or a is None else a - b
+        change = pct_change(b, a)
+        metrics.append({
+            "key": key, "label": label, "unit": unit, "before": b, "after": a,
+            "delta": delta, "change_pct": change, "lower_is_better": lower_is_better,
+        })
+
+    before_servers = {row["server"]: row for row in before.get("servers", [])}
+    after_servers = {row["server"]: row for row in after.get("servers", [])}
+    servers = []
+    for server in sorted(set(before_servers) | set(after_servers)):
+        b = before_servers.get(server, {})
+        a = after_servers.get(server, {})
+        servers.append({
+            "server": server,
+            "before_calls": b.get("calls", 0),
+            "after_calls": a.get("calls", 0),
+            "before_tokens": b.get("observed_tokens", 0),
+            "after_tokens": a.get("observed_tokens", 0),
+            "before_waste_tokens": b.get("waste_tokens", 0),
+            "after_waste_tokens": a.get("waste_tokens", 0),
+            "before_utility": b.get("utility_score"),
+            "after_utility": a.get("utility_score"),
+        })
+    waste_before = before.get("estimated_waste_tokens") or 0
+    waste_after = after.get("estimated_waste_tokens") or 0
+    waste_reduction_pct = None if not waste_before else 100.0 * (waste_before - waste_after) / waste_before
+    return {
+        "version": VERSION,
+        "mode": "before-after",
+        "before": before,
+        "after": after,
+        "metrics": metrics,
+        "servers": servers,
+        "estimated_waste_reduction_pct": waste_reduction_pct,
     }
 
 
@@ -522,6 +642,8 @@ def print_text(data: dict[str, Any], limit: int = 20) -> None:
     print("=" * 68)
     print(f"Calls: {data['calls']:,}   Observed payload: ~{data['observed_tokens']:,} tok   Estimated waste: ~{data['estimated_waste_tokens']:,} tok ({data['estimated_waste_pct']:.1f}%)")
     print(f"Files: {data['files_scanned']:,}   Sources: {', '.join(f'{k}:{v}' for k,v in data['sources'].items()) or 'none'}")
+    if data.get("schema_files"):
+        print(f"Advertised schema: ~{data['advertised_schema_tokens']:,} tok across {data['schema_files']} capture file(s)   Median latency: {fmt_int(data.get('median_latency_ms'))} ms")
     print()
     if not data["servers"]:
         print("No supported tool calls found.")
@@ -542,7 +664,7 @@ def print_text(data: dict[str, Any], limit: int = 20) -> None:
 
 def print_markdown(data: dict[str, Any]) -> None:
     print("# ToolTax report\n")
-    print(f"**{data['calls']:,} calls** · **~{data['observed_tokens']:,} observed payload tokens** · **~{data['estimated_waste_tokens']:,} estimated waste ({data['estimated_waste_pct']:.1f}%)**\n")
+    print(f"**{data['calls']:,} calls** × **~{data['observed_tokens']:,} observed payload tokens** × **~{data['estimated_waste_tokens']:,} estimated waste ({data['estimated_waste_pct']:.1f}%)**\n")
     print("| Server | Calls | Observed tokens | Waste | Utility | Recommendation |")
     print("|---|---:|---:|---:|---:|---|")
     for row in data["servers"]:
@@ -552,6 +674,65 @@ def print_markdown(data: dict[str, Any]) -> None:
         print(f"- **{f['server']}/{f['tool']}** — {f['kind']}: ~{f['waste_tokens']:,} tokens ({f['detail']})")
     print("\n> Tool token counts are payload estimates, not provider billing totals. Utility is a heuristic, not causal ROI.")
 
+
+
+def print_comparison_text(data: dict[str, Any]) -> None:
+    print("TOOLTAX — BEFORE / AFTER")
+    print("=" * 78)
+    print(f"{'METRIC':<26} {'BEFORE':>14} {'AFTER':>14} {'CHANGE':>16}")
+    print("-" * 78)
+    for row in data["metrics"]:
+        before = fmt_int(row["before"])
+        after = fmt_int(row["after"])
+        change = "—" if row["change_pct"] is None else f"{row['change_pct']:+.1f}%"
+        unit = row["unit"]
+        if row["before"] is not None:
+            before = f"{before} {unit}"
+        if row["after"] is not None:
+            after = f"{after} {unit}"
+        print(f"{row['label']:<26} {before:>14} {after:>14} {change:>16}")
+    reduction = data.get("estimated_waste_reduction_pct")
+    print()
+    if reduction is None:
+        print("Estimated waste reduction: — (baseline waste is zero or unavailable)")
+    else:
+        print(f"Estimated waste reduction: {reduction:.1f}%")
+    changed = [r for r in data.get("servers", []) if r["before_tokens"] != r["after_tokens"] or r["before_waste_tokens"] != r["after_waste_tokens"]]
+    if changed:
+        print("\nSERVER CHANGES")
+        print(f"{'SERVER':<22} {'CALLS':>11} {'PAYLOAD TOK':>23} {'WASTE TOK':>23}")
+        print("-" * 82)
+        for row in changed[:15]:
+            print(f"{row['server'][:22]:<22} {f"{row['before_calls']}→{row['after_calls']}":>11} {f"{row['before_tokens']:,}→{row['after_tokens']:,}":>23} {f"{row['before_waste_tokens']:,}→{row['after_waste_tokens']:,}":>23}")
+    print("\nInterpretation: lower is better for the displayed metrics; schema is advertised MCP definition size, not provider billing/context truth.")
+
+
+def print_comparison_markdown(data: dict[str, Any]) -> None:
+    print("# ToolTax before / after\n")
+    print("| Metric | Before | After | Change |")
+    print("|---|---:|---:|---:|")
+    for row in data["metrics"]:
+        b = "—" if row["before"] is None else f"{fmt_int(row['before'])} {row['unit']}"
+        a = "—" if row["after"] is None else f"{fmt_int(row['after'])} {row['unit']}"
+        c = "—" if row["change_pct"] is None else f"{row['change_pct']:+.1f}%"
+        print(f"| {row['label']} | {b} | {a} | {c} |")
+    reduction = data.get("estimated_waste_reduction_pct")
+    if reduction is not None:
+        print(f"\n**Estimated waste reduction: {reduction:.1f}%**\n")
+    print("> Lower is better for these metrics. Advertised schema size is measured from MCP `tools/list`, not reconstructed provider billing or exact model-context cost.")
+
+
+def analyze_inputs(inputs: list[str], args: argparse.Namespace) -> dict[str, Any]:
+    stats = ParseStats()
+    files = discover_paths(inputs, args.source)
+    calls: list[ToolCall] = []
+    for path in files:
+        try:
+            calls.extend(load_file(path, args.source, stats))
+        except (OSError, PermissionError) as exc:
+            print(f"warning: {path}: {exc}", file=sys.stderr)
+    findings = analyze(calls, args.duplicate_window, args.large_output_tokens)
+    return report_data(calls, findings, stats, files, share_safe=args.share_safe)
 
 def demo_calls() -> list[ToolCall]:
     now = dt.datetime.now(dt.timezone.utc)
@@ -581,26 +762,39 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duplicate-window", type=int, default=8, help="Calls within which an identical tool+argument call is considered duplicate.")
     parser.add_argument("--large-output-tokens", type=int, default=2000, help="Estimated output token threshold for bloat signal.")
     parser.add_argument("--demo", action="store_true", help="Show a deterministic demo report.")
+    parser.add_argument("--before", action="append", default=[], metavar="PATH", help="Baseline trace/file/directory for before/after comparison; repeatable.")
+    parser.add_argument("--after", action="append", default=[], metavar="PATH", help="Optimized trace/file/directory for before/after comparison; repeatable.")
+    parser.add_argument("--share-safe", action="store_true", help="Suppress local source paths in report output. Use scripts/tool_tax_redact.py to sanitize raw traces before sharing them.")
     parser.add_argument("--version", action="version", version=f"ToolTax {VERSION}")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    stats = ParseStats()
-    files: list[pathlib.Path] = []
-    if args.demo:
+    compare_mode = bool(args.before or args.after)
+    if compare_mode and (not args.before or not args.after):
+        raise SystemExit("before/after comparison requires at least one --before and one --after path")
+    if compare_mode and (args.paths or args.demo):
+        raise SystemExit("do not combine positional paths/--demo with --before/--after")
+
+    if compare_mode:
+        data = comparison_data(analyze_inputs(args.before, args), analyze_inputs(args.after, args))
+    elif args.demo:
+        stats = ParseStats()
         calls = demo_calls()
+        findings = analyze(calls, args.duplicate_window, args.large_output_tokens)
+        data = report_data(calls, findings, stats, [], share_safe=args.share_safe)
     else:
-        files = discover_paths(args.paths, args.source)
-        calls = []
-        for path in files:
-            try:
-                calls.extend(load_file(path, args.source, stats))
-            except (OSError, PermissionError) as exc:
-                print(f"warning: {path}: {exc}", file=sys.stderr)
-    findings = analyze(calls, args.duplicate_window, args.large_output_tokens)
-    data = report_data(calls, findings, stats, files)
+        data = analyze_inputs(args.paths, args)
+
+    def emit() -> None:
+        if args.format == "json":
+            json.dump(data, sys.stdout, indent=2)
+            print()
+        elif args.format == "markdown":
+            print_comparison_markdown(data) if compare_mode else print_markdown(data)
+        else:
+            print_comparison_text(data) if compare_mode else print_text(data)
 
     if args.output:
         target = pathlib.Path(args.output)
@@ -609,23 +803,12 @@ def main(argv: list[str] | None = None) -> int:
         with target.open("w", encoding="utf-8") as handle:
             sys.stdout = handle
             try:
-                if args.format == "json":
-                    json.dump(data, sys.stdout, indent=2)
-                    print()
-                elif args.format == "markdown":
-                    print_markdown(data)
-                else:
-                    print_text(data)
+                emit()
             finally:
                 sys.stdout = old
         print(str(target))
-    elif args.format == "json":
-        json.dump(data, sys.stdout, indent=2)
-        print()
-    elif args.format == "markdown":
-        print_markdown(data)
     else:
-        print_text(data)
+        emit()
     return 0
 
 

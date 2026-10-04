@@ -35,6 +35,7 @@ Optional flags:
 - `--env KEY=VALUE` — child environment override; repeatable
 - `--quiet` — suppress the final stderr summary
 - `--trace PATH` — explicit trace destination
+- `--redact` — redact common secrets/PII before trace persistence while keeping original metric estimates
 
 If `--trace` is omitted, traces are written beneath `~/.tooltax/traces/`.
 
@@ -57,7 +58,7 @@ ToolTax converts captured arguments, results, and advertised tool schemas to an 
 
 ## Privacy
 
-Live traces can contain secrets and customer data in tool arguments/results. Treat `~/.tooltax/traces/` as sensitive. v0.2's planned redaction pipeline is not complete yet; do not publish raw capture files.
+Live traces can contain secrets and customer data in tool arguments/results. Treat `~/.tooltax/traces/` as sensitive. Use `--redact` when the stored trace may be shared. Redaction is heuristic, so review redacted traces before publication and prefer aggregate reports.
 
 ## Current limitation
 

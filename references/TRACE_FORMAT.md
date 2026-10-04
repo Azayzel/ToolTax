@@ -7,13 +7,13 @@ ToolTax's portable ingestion format is JSONL. One JSON object per line.
 ## Tool call
 
 ```json
-{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T16:00:00Z","session":"abc","call_id":"1","server":"github","tool":"search_code","arguments":{"q":"TODO"}}
+{"schema":"tooltax.v1","event":"tool_call","timestamp":"2026-10-04T16:00:00Z","session":"abc","call_id":"1","server":"github","tool":"search_code","arguments":{"q":"TODO"},"estimated_input_tokens":7}
 ```
 
 ## Tool result
 
 ```json
-{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T16:00:01Z","session":"abc","call_id":"1","server":"github","tool":"search_code","result":{"items":[]},"success":true,"error":false,"latency_ms":1000}
+{"schema":"tooltax.v1","event":"tool_result","timestamp":"2026-10-04T16:00:01Z","session":"abc","call_id":"1","server":"github","tool":"search_code","result":{"items":[]},"success":true,"error":false,"latency_ms":1000,"estimated_output_tokens":4}
 ```
 
 Required for useful analysis:
@@ -31,13 +31,14 @@ Recommended:
 - `result`
 - `success` or `error`
 - `latency_ms` when measured directly
+- `estimated_input_tokens` / `estimated_output_tokens` when measured before redaction
 
 ## Live capture metadata
 
 ### Capture start
 
 ```json
-{"schema":"tooltax.v1","event":"capture_start","timestamp":"2026-10-04T16:00:00Z","session":"stdio-...","server":"github","transport":"stdio","capture_version":"0.2.0"}
+{"schema":"tooltax.v1","event":"capture_start","timestamp":"2026-10-04T16:00:00Z","session":"stdio-...","server":"github","transport":"stdio","capture_version":"0.2.1"}
 ```
 
 ### Tool schema snapshot
@@ -61,3 +62,8 @@ The `snapshot_*` fields describe only that response page. `tool_count`, `schema_
 Readers must ignore unknown events and unknown fields. This lets capture telemetry evolve without breaking the stable `tool_call` / `tool_result` analysis contract.
 
 ToolTax deliberately owns this normalized format so scoring does not depend on unstable vendor transcript schemas.
+
+
+## Redaction compatibility
+
+Capture-time redaction may replace argument/result/schema strings with placeholders. When live capture emitted `estimated_input_tokens`, `estimated_output_tokens`, `latency_ms`, and schema estimate fields, analyzers should prefer those preserved measurements over re-estimating the shortened redacted payload.

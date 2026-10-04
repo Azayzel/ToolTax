@@ -4,7 +4,7 @@ description: Audit AI agent tool and MCP usage for wasted tokens, duplicate call
 license: MIT
 compatibility: Requires Python 3.10+. Supports local ToolTax JSONL, Claude Code transcripts, OpenAI Codex rollouts, and live stdio MCP capture on a best-effort/transport-transparent basis.
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   command: "/tool-tax"
 ---
 
@@ -69,7 +69,33 @@ The wrapper must remain protocol-transparent:
 - write ToolTax diagnostics to stderr only, never stdout
 - do not inject an initialize handshake or assume a lifecycle revision
 
-Live capture records `tool_call` / `tool_result` events compatible with `scripts/tool_tax.py`, plus schema/capture metadata described in `references/TRACE_FORMAT.md`.
+Live capture records `tool_call` / `tool_result` events compatible with `scripts/tool_tax.py`, plus schema/capture metadata described in `references/TRACE_FORMAT.md`. Add `--redact` when a trace may be shared; metrics are calculated from the original in-memory payload before redaction.
+
+## Compare an optimization
+
+When the user wants to know whether disabling/tuning a server helped, analyze representative baseline and optimized traces:
+
+```bash
+python scripts/tool_tax.py --before before.jsonl --after after.jsonl
+```
+
+Report absolute and percentage changes for advertised schema, observed payload, estimated waste, calls, errors, duplicates, and median latency. Treat this as an observed before/after comparison, not proof of causality.
+
+## Redaction workflow
+
+Prefer redaction at capture time:
+
+```bash
+python scripts/tool_tax_capture.py --server-name NAME --redact -- <server-command>
+```
+
+For existing JSONL traces, create a separate redacted copy:
+
+```bash
+python scripts/tool_tax_redact.py raw.jsonl share-safe.jsonl
+```
+
+For reports, add `--share-safe` to suppress local source-file paths. Never describe heuristic redaction as guaranteed anonymization or DLP.
 
 ## `/tool-tax` workflow
 
@@ -82,7 +108,9 @@ When invoked:
 5. For live traces, also report the advertised schema estimate and proxy-observed latency, explicitly labeling both.
 6. Explain the top 3 concrete waste signals with evidence.
 7. Recommend **one action per server**: keep, monitor, cap/filter output, deduplicate/cache, investigate reliability, or consider disabling/replacing.
-8. If a parser finds nothing, do not guess. Explain which input formats are supported and offer the canonical schema in `references/TRACE_FORMAT.md`.
+8. If the user made a change and wants proof it helped, use `--before` / `--after` on representative runs and lead with the delta table.
+9. Before sharing raw traces, use capture-time `--redact` or `scripts/tool_tax_redact.py`; use `--share-safe` for aggregate reports.
+10. If a parser finds nothing, do not guess. Explain which input formats are supported and offer the canonical schema in `references/TRACE_FORMAT.md`.
 
 ## Interpretation thresholds
 
@@ -118,3 +146,5 @@ See:
 - [Capture](references/CAPTURE.md)
 - [Trace format](references/TRACE_FORMAT.md)
 - [Scoring](references/SCORING.md)
+- [Redaction](references/REDACTION.md)
+- [Comparison](references/COMPARISON.md)

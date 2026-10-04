@@ -24,7 +24,20 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
-VERSION = "0.2.0"
+try:
+    from tool_tax_redaction import Redactor
+except ModuleNotFoundError:  # direct import-by-path in tests/embedders
+    import importlib.util
+    _redaction_path = pathlib.Path(__file__).with_name("tool_tax_redaction.py")
+    _spec = importlib.util.spec_from_file_location("tool_tax_redaction", _redaction_path)
+    if _spec is None or _spec.loader is None:
+        raise
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules.setdefault("tool_tax_redaction", _module)
+    _spec.loader.exec_module(_module)
+    Redactor = _module.Redactor
+
+VERSION = "0.2.1"
 SCHEMA = "tooltax.v1"
 
 
@@ -61,15 +74,17 @@ def sha256_text(value: Any) -> str:
 
 
 class TraceWriter:
-    def __init__(self, path: pathlib.Path):
+    def __init__(self, path: pathlib.Path, redactor: Redactor | None = None):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._handle = path.open("a", encoding="utf-8", buffering=1)
         self._lock = threading.Lock()
+        self._redactor = redactor
 
     def write(self, event: dict[str, Any]) -> None:
+        stored = self._redactor.redact(event) if self._redactor else event
         with self._lock:
-            self._handle.write(compact_json(event) + "\n")
+            self._handle.write(compact_json(stored) + "\n")
 
     def close(self) -> None:
         with self._lock:
@@ -177,6 +192,7 @@ class CaptureSession:
                     "arguments": pending.arguments,
                     "transport": "stdio",
                     "request_bytes": pending.request_bytes,
+                    "estimated_input_tokens": token_estimate(pending.arguments),
                 }
             )
 
@@ -288,6 +304,7 @@ class CaptureSession:
                 "transport": "stdio",
                 "response_bytes": response_bytes,
                 "latency_ms": latency_ms,
+                "estimated_output_tokens": output_tokens,
             }
         )
 
@@ -388,7 +405,7 @@ def run_proxy(args: argparse.Namespace) -> int:
         raise SystemExit("missing MCP server command; use: tool_tax_capture.py [options] -- <command> [args...]")
 
     trace_path = pathlib.Path(os.path.expanduser(args.trace)) if args.trace else default_trace_path(args.server_name)
-    writer = TraceWriter(trace_path)
+    writer = TraceWriter(trace_path, Redactor() if args.redact else None)
     session = CaptureSession(args.server_name, writer)
 
     env = os.environ.copy()
@@ -477,6 +494,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cwd", help="Working directory for the wrapped MCP server.")
     parser.add_argument("--env", action="append", default=[], metavar="KEY=VALUE", help="Environment override for the wrapped server; repeatable.")
     parser.add_argument("--quiet", action="store_true", help="Suppress the capture summary on stderr.")
+    parser.add_argument("--redact", action="store_true", help="Redact common secrets, emails, auth tokens, and user-home path names before writing the trace. Metrics are computed from the original in-memory payload.")
     parser.add_argument("--version", action="version", version=f"ToolTax capture {VERSION}")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="MCP server command, normally after --.")
     return parser

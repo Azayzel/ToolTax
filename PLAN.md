@@ -17,8 +17,8 @@
 - [x] De-duplicate schema catalogs across pagination and repeated tool-list refreshes
 - [x] Protocol-transparency integration test with a real child process
 - [ ] Session/project filtering and date windows
-- [ ] Redaction pipeline before report sharing
-- [ ] Baseline comparison: before vs after disabling/tuning a server
+- [x] Redaction pipeline before report sharing
+- [x] Baseline comparison: before vs after disabling/tuning a server
 - [ ] Streamable HTTP capture strategy that preserves auth/session semantics
 
 ## v0.3 — team/CI

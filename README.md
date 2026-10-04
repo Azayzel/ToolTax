@@ -44,7 +44,7 @@ From live stdio capture, ToolTax additionally observes:
 - de-duplicated tool schema size across paginated/refresh responses
 - protocol-level and `isError` tool failures
 
-ToolTax does **not** claim to reconstruct provider billing. Advertised schema tokens and payload tokens use a deterministic ~4 characters/token estimate so runs can be compared consistently.
+ToolTax does **not** claim to reconstruct provider billing. Advertised schema tokens and payload tokens use deterministic, provider-neutral estimates so runs can be compared consistently. Live capture preserves the original payload estimates even when the stored trace is redacted.
 
 ## Quick start
 
@@ -112,6 +112,52 @@ The capture layer deliberately does not implement or alter MCP lifecycle semanti
 
 See [`references/CAPTURE.md`](references/CAPTURE.md) for capture semantics and limitations.
 
+## Before / after
+
+Capture or collect a baseline and an optimized run, then compare them directly:
+
+```bash
+python scripts/tool_tax.py \
+  --before ~/.tooltax/traces/before.jsonl \
+  --after ~/.tooltax/traces/after.jsonl
+```
+
+The comparison reports advertised schema size, observed tool payload, estimated waste, call count, errors, duplicate calls, and median latency with percentage deltas. JSON and Markdown output work here too.
+
+```bash
+python scripts/tool_tax.py --before before.jsonl --after after.jsonl --format markdown -o savings.md
+```
+
+Use representative runs for both sides. ToolTax measures change in the observed runs; it does not claim causality from an uncontrolled before/after experiment.
+
+## Share-safe redaction
+
+Capture with redaction enabled:
+
+```bash
+python scripts/tool_tax_capture.py \
+  --server-name my-server \
+  --redact \
+  --trace ~/.tooltax/traces/my-server.safe.jsonl \
+  -- <server-command> <server-args...>
+```
+
+Or sanitize an existing JSONL trace into a separate file:
+
+```bash
+python scripts/tool_tax_redact.py raw.jsonl share-safe.jsonl
+```
+
+Redaction removes values under common secret-bearing keys plus common email/token/home-path patterns. It is a defensive sharing aid, **not a formal DLP guarantee**. The redactor refuses to overwrite the source and drops malformed raw lines instead of copying them into a supposedly safe file.
+
+For aggregate reports, `--share-safe` suppresses local source-file paths:
+
+```bash
+python scripts/tool_tax.py share-safe.jsonl --share-safe --format markdown
+```
+
+See [`references/REDACTION.md`](references/REDACTION.md) and [`references/COMPARISON.md`](references/COMPARISON.md).
+
 ## Agent skill
 
 The repository root is a portable Agent Skill. Invoke it as **`/tool-tax`** in clients that expose skill commands, or ask your agent to audit tool/MCP waste.
@@ -127,7 +173,7 @@ Vendor session formats change. ToolTax isolates those differences in adapters an
 
 ## Privacy
 
-Tool traces can contain source code, command output, credentials, customer data and prompts. Live capture also records tool arguments/results and advertised tool definitions. ToolTax is local-first and performs no network calls of its own. Publish aggregate reports, not raw traces.
+Tool traces can contain source code, command output, credentials, customer data and prompts. Live capture also records tool arguments/results and advertised tool definitions. ToolTax is local-first and performs no network calls of its own. Prefer `--redact` at capture time or create a separate redacted copy before sharing; publish aggregate reports when possible.
 
 ## Tests
 
@@ -139,7 +185,7 @@ The capture tests launch a fake stdio MCP server and verify that protocol traffi
 
 ## Status
 
-**v0.2.0** — live stdio MCP capture is implemented. The next v0.2 work is filtering/date windows, a redaction pipeline for shareable traces, and before/after baseline comparison.
+**v0.2.1** — live stdio capture, share-safe redaction, preserved capture metrics, and before/after comparison are implemented. Remaining v0.2 work is filtering/date windows and a streamable HTTP capture strategy.
 
 ## License
 
