@@ -70,46 +70,21 @@ The repository root is a portable Agent Skill. Invoke it as **`/tool-tax`** in c
 - Claude Code transcript JSONL — best effort
 - OpenAI Codex rollout JSONL — best effort
 
-Vendor transcript formats are treated as adapters, not stable contracts. The normalized format is documented in [`references/TRACE_FORMAT.md`](references/TRACE_FORMAT.md).
+Vendor session formats change. ToolTax isolates those differences in adapters and owns a stable normalized trace format for integrations.
 
-## Honest metric semantics
+## Privacy
 
-The core metric is **observed payload tokens**, estimated as roughly four UTF-8 characters per token across tool arguments and results. It is deliberately *not* labeled API spend.
+Tool traces can contain source code, command output, credentials, customer data and prompts. ToolTax is local-first and dependency-free. Publish aggregate reports, not raw traces.
 
-Where model usage counters exist in a trace, ToolTax surfaces them separately. It does not assume the complete tool-schema/context cost is recoverable from local transcripts.
-
-## Scoring
-
-The utility score is a transparent heuristic, not a claim about business ROI. See [`references/SCORING.md`](references/SCORING.md).
-
-## Design principles
-
-1. Local-first: traces can contain source code, prompts, credentials, and private data.
-2. Zero dependencies for the core analyzer.
-3. Adapter isolation: vendor format churn should not infect scoring logic.
-4. Conservative claims: distinguish measured values from estimates.
-5. Useful before fancy: CLI first; dashboards later.
-
-## Roadmap
-
-- live MCP capture/proxy layer
-- tool-schema context tax measurement
-- before/after optimization comparison
-- GitHub Action regression checks
-- additional agent adapters
-- richer overlap/duplicate-capability detection
-
-See [`PLAN.md`](PLAN.md), [`DECISIONS.md`](DECISIONS.md), and [`SHELVED.md`](SHELVED.md).
-
-## Development
+## Tests
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-## Privacy
+## Status
 
-ToolTax processes traces locally and performs no network calls. Treat session files as sensitive. Do not publish raw traces without reviewing them for secrets and private data.
+v0.1.0 — deliberately small. The next useful layer is outcome-aware analysis and capture adapters that can observe tool-schema overhead and true execution timings without depending on reverse-engineered transcript files.
 
 ## License
 
