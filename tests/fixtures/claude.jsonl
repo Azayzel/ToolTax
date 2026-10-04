@@ -1,0 +1,4 @@
+{"type":"assistant","timestamp":"2026-10-04T16:00:00Z","sessionId":"c1","message":{"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":10,"cache_creation_input_tokens":5},"content":[{"type":"tool_use","id":"toolu_1","name":"mcp__github__search_code","input":{"q":"TODO"}}]}}
+{"type":"user","timestamp":"2026-10-04T16:00:01Z","sessionId":"c1","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"found 3"}]}}
+{"type":"assistant","timestamp":"2026-10-04T16:00:02Z","sessionId":"c1","message":{"usage":{"input_tokens":120,"output_tokens":10},"content":[{"type":"tool_use","id":"toolu_2","name":"mcp__fs__read","input":{"path":"x"}}]}}
+{"type":"user","timestamp":"2026-10-04T16:00:03Z","sessionId":"c1","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_2","content":"permission denied","is_error":true}]}}
